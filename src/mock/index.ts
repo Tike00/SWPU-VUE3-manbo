@@ -92,3 +92,181 @@ Mock.mock('/api/figure/orders', 'get', {
 })
 
 console.log('%c Mock Ready: 列表已保留新增项，且价格实时刷新', 'color: #f56c6c; font-weight: bold')
+// ======================= 订单管理：列表 / 详情 / 状态更新 =======================
+
+interface MockOrderItem {
+  id: string
+  productName: string
+  ip: string
+  category: string
+  scale: string
+  price: number
+  quantity: number
+  subtotal: number
+}
+
+interface MockOrder {
+  id: number
+  orderNo: string
+  customerName: string
+  phone: string
+  address: string
+  status: 'pending' | 'paid' | 'shipped' | 'completed' | 'cancelled'
+  payMethod: 'alipay' | 'wechat' | 'card' | 'cash'
+  createdAt: string
+  remark: string
+  totalAmount: number
+  items: MockOrderItem[]
+}
+
+// 生成一批模拟订单数据（用你上面的 ipList / categoryList / figureNameList）
+let orderList: MockOrder[] = Mock.mock({
+  'list|30-60': [
+    {
+      'id|+1': 1,
+      orderNo: '@guid()',
+      customerName: '@cname()',
+      phone: /^1[3-9]\d{9}$/,
+      address: '@city(true) @county() 详细地址@integer(1,200)号',
+      'status|1': ['pending', 'paid', 'shipped', 'completed', 'cancelled'],
+      'payMethod|1': ['alipay', 'wechat', 'card', 'cash'],
+      createdAt: '@datetime("2025-MM-dd HH:mm:ss")',
+      remark: '@csentence(6, 18)',
+      items: [
+        {
+          id: '@id',
+          'productName|1': figureNameList,
+          'ip|1': ipList,
+          'category|1': categoryList,
+          'scale|1': scaleList,
+          'price|99-1999': 1,
+          'quantity|1-3': 1,
+          subtotal: 0,
+        },
+        {
+          id: '@id',
+          'productName|1': figureNameList,
+          'ip|1': ipList,
+          'category|1': categoryList,
+          'scale|1': scaleList,
+          'price|99-1999': 1,
+          'quantity|1-3': 1,
+          subtotal: 0,
+        },
+      ],
+      totalAmount: 0,
+    },
+  ],
+}).list
+
+// 计算每个订单的 subtotal 和 totalAmount
+orderList = orderList.map((order) => {
+  order.items = order.items.map((item) => ({
+    ...item,
+    subtotal: item.price * item.quantity,
+  }))
+  order.totalAmount = order.items.reduce((sum, item) => sum + item.subtotal, 0)
+  return order
+})
+
+// 简单的查询参数解析工具
+const parseQuery = (url: string) => {
+  const queryIndex = url.indexOf('?')
+  if (queryIndex === -1) return {}
+  const search = url.slice(queryIndex)
+  const u = new URL(search, 'http://dummy.base')
+  const params: Record<string, string> = {}
+  u.searchParams.forEach((v, k) => {
+    params[k] = v
+  })
+  return params
+}
+
+// 列表接口：支持分页 + 状态筛选 + 关键词 + 时间区间
+Mock.mock(/\/api\/orders(\?.*)?$/, 'get', (options: any) => {
+  const params = parseQuery(options.url || '')
+
+  const page = Number(params.page || 1)
+  const pageSize = Number(params.pageSize || 10)
+  const keyword = (params.keyword || '').trim()
+  const status = (params.status || '').trim()
+  const startDate = params.startDate
+  const endDate = params.endDate
+
+  let filtered = orderList.slice()
+
+  if (keyword) {
+    filtered = filtered.filter((o) => {
+      return (
+        o.orderNo.includes(keyword) ||
+        o.customerName.includes(keyword) ||
+        o.phone.includes(keyword)
+      )
+    })
+  }
+
+  if (status) {
+    filtered = filtered.filter((o) => o.status === status)
+  }
+
+  if (startDate && endDate) {
+    filtered = filtered.filter((o) => {
+      const d = o.createdAt.slice(0, 10)
+      return d >= startDate && d <= endDate
+    })
+  }
+
+  const total = filtered.length
+  const start = (page - 1) * pageSize
+  const end = start + pageSize
+  const list = filtered.slice(start, end)
+
+  return {
+    code: 200,
+    data: {
+      list,
+      total,
+    },
+  }
+})
+
+// 详情接口：通过 id 精确查找
+Mock.mock('/api/orders/detail', 'get', (options: any) => {
+  const params = parseQuery(options.url || '')
+  const id = params.id
+  const order = orderList.find((o) => String(o.id) === String(id))
+
+  if (!order) {
+    return {
+      code: 404,
+      message: '订单不存在',
+    }
+  }
+
+  return {
+    code: 200,
+    data: order,
+  }
+})
+
+// 状态更新接口
+Mock.mock('/api/orders/updateStatus', 'post', (options: any) => {
+  const body = options.body ? JSON.parse(options.body) : {}
+  const { id, status } = body
+  const order = orderList.find((o) => String(o.id) === String(id))
+
+  if (!order) {
+    return {
+      code: 404,
+      message: '订单不存在',
+    }
+  }
+
+  order.status = status
+
+  return {
+    code: 200,
+    message: '订单状态已更新（Mock）',
+    data: order,
+  }
+})
