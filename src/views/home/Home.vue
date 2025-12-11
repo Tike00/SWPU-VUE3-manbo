@@ -18,7 +18,7 @@
         <el-card shadow="hover" class="stat-card">
           <template #header>
             <div class="card-header">
-              <span>总销量 (件)</span>
+              <span>总销量 (千件)</span>
               <el-tag type="warning">Sold</el-tag>
             </div>
           </template>
@@ -54,12 +54,12 @@
 
     <!-- 2. 中间图表区域 -->
     <el-row :gutter="20" class="mb-4">
-      <!-- 左侧：销售趋势折线图 -->
+      <!-- 左侧：按手办名称统计的销量折线图 -->
       <el-col :span="16">
         <el-card shadow="never">
           <template #header>
             <div class="flex justify-between items-center">
-              <span class="font-bold">2025 销售额趋势 (日)</span>
+              <span class="font-bold">2025 各手办销量分布（件）</span>
               <el-button size="small" circle icon="Refresh" @click="refreshData" />
             </div>
           </template>
@@ -85,7 +85,12 @@
       </template>
       <el-table :data="latestOrders" style="width: 100%" stripe>
         <el-table-column prop="date" label="日期" width="120" sortable />
-        <el-table-column prop="productName" label="产品名称" min-width="200" show-overflow-tooltip />
+        <el-table-column
+          prop="productName"
+          label="产品名称"
+          min-width="200"
+          show-overflow-tooltip
+        />
         <el-table-column prop="ip" label="所属IP" width="120">
           <template #default="{ row }">
             <el-tag :type="getIpTagType(row.ip)">{{ row.ip }}</el-tag>
@@ -106,7 +111,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref, computed, watch, nextTick } from 'vue'
-import { useDashboardStore } from '@/stores/dashboard' // 引用上面定义的 store
+import { useDashboardStore } from '@/stores/dashboard'
 import * as echarts from 'echarts'
 
 // Store
@@ -118,9 +123,8 @@ const pieChartRef = ref<HTMLElement | null>(null)
 let lineChartInstance: echarts.ECharts | null = null
 let pieChartInstance: echarts.ECharts | null = null
 
-// Computed: 获取最新的 8 条订单
+// Computed: 获取最新的 8 条订单（扁平后的订单行）
 const latestOrders = computed(() => {
-  // 浅拷贝并倒序，取前8
   return [...store.orderList].reverse().slice(0, 8)
 })
 
@@ -132,56 +136,119 @@ const getIpTagType = (ip: string) => {
   return 'info'
 }
 
-// ECharts 初始化逻辑
+// 初始化图表
 const initCharts = () => {
   if (lineChartRef.value && pieChartRef.value) {
-    // 1. Line Chart
     lineChartInstance = echarts.init(lineChartRef.value)
-    // 2. Pie Chart
     pieChartInstance = echarts.init(pieChartRef.value)
-    
     updateCharts()
   }
 }
 
-// ECharts 数据更新逻辑
+// 更新图表数据
 const updateCharts = () => {
   if (!lineChartInstance || !pieChartInstance) return
 
-  // 设置 Line Chart
-  const trend = store.trendData
+  // ============================
+  // 1. 折线图：按“手办名称”汇总销量
+  // ============================
+  // 假设 store.orderList 是 DashboardOrderRow[]：
+  // { date, productName, ip, category, scale, quantity, revenue }
+  const productMap = new Map<string, number>()
+
+  store.orderList.forEach((row: any) => {
+    const name = row.productName || '未知手办'
+    const qty = Number(row.quantity) || 0
+    const prev = productMap.get(name) || 0
+    productMap.set(name, prev + qty)
+  })
+
+  const productNames = Array.from(productMap.keys())
+  const quantities = Array.from(productMap.values())
+
   lineChartInstance.setOption({
-    tooltip: { trigger: 'axis' },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', boundaryGap: false, data: trend.dates },
-    yAxis: { type: 'value' },
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params: any) => {
+        if (!params || !params.length) return ''
+        const p = params[0]
+        return `${p.axisValue}<br/>销量：${p.data} 千件`
+      },
+    },
+    grid: { left: '3%', right: '3%', bottom: '20%', containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: productNames,
+      axisLabel: {
+        interval: 0, // 全部显示
+        rotate: 45,  // 斜着写
+        fontSize: 11,
+      },
+    },
+    yAxis: {
+      type: 'value',
+      name: '销量（千件）',
+    },
     series: [
       {
-        name: '销售额',
+        name: '销量（千件）',
         type: 'line',
         smooth: true,
-        data: trend.values,
+        data: quantities,
         areaStyle: { opacity: 0.3, color: '#409EFF' },
         itemStyle: { color: '#409EFF' },
       },
     ],
   })
 
-  // 设置 Pie Chart
+  // ============================
+  // 2. 饼图：IP 营收占比
+  // ============================
   const pieData = store.revenueByIp
   pieChartInstance.setOption({
-    tooltip: { trigger: 'item' },
+    tooltip: {
+      trigger: 'item',
+      confine: false,
+      // 某些版本支持 appendToBody，可以减少被父级裁剪的情况
+      // @ts-ignore
+      appendToBody: true,
+      formatter: (params: any) => {
+        const value = Number(params.value) || 0
+        return `${params.name}<br/>营收：¥${value.toLocaleString()}<br/>占比：${params.percent}%`
+      },
+    },
     legend: { bottom: '0%', left: 'center' },
     series: [
       {
         name: 'IP 营收',
         type: 'pie',
-        radius: ['40%', '70%'], // 环形图
-        avoidLabelOverlap: false,
-        itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
+        radius: ['40%', '70%'],
+        avoidLabelOverlap: true,
+        itemStyle: {
+          borderRadius: 10,
+          borderColor: '#fff',
+          borderWidth: 2,
+        },
         data: pieData,
-        label: { show: false },
-        emphasis: { label: { show: true, fontSize: 16, fontWeight: 'bold' } },
+        label: {
+          show: true,
+          position: 'outside',
+          formatter: '{b}', // 只显示 IP 名
+        },
+        labelLine: {
+          show: true,
+          length: 10,
+          length2: 8,
+          smooth: true,
+        },
+        emphasis: {
+          label: {
+            show: true,
+            fontSize: 16,
+            fontWeight: 'bold',
+            formatter: '{b}\n{d}%',
+          },
+        },
       },
     ],
   })
@@ -196,22 +263,21 @@ const handleResize = () => {
 // 刷新数据
 const refreshData = async () => {
   await store.fetchDashboardData()
+  updateCharts()
 }
 
 // 生命周期
 onMounted(async () => {
-  // 1. 获取数据
   await store.fetchDashboardData()
-  // 2. 初始化图表
   nextTick(() => {
     initCharts()
     window.addEventListener('resize', handleResize)
   })
 })
 
-// 监听数据变化自动刷新图表 (如果 mock 重新请求导致 store 变化)
+// 监听数据变化自动刷新图表
 watch(
-  () => [store.revenueList, store.orderList],
+  () => [store.orderList, store.revenueByIp],
   () => {
     updateCharts()
   }
@@ -249,14 +315,28 @@ watch(
   color: #909399;
 }
 
-/* 图表容器固定高度 */
+/* 图表容器固定高度 + 允许溢出（避免 label/tooltip 被截断） */
 .chart-box {
   height: 350px;
   width: 100%;
+  overflow: visible;
 }
 
-.flex { display: flex; }
-.justify-between { justify-content: space-between; }
-.items-center { align-items: center; }
-.font-bold { font-weight: bold; }
+/* 避免 el-card 把 ECharts 的 tooltip / label 裁掉 */
+:deep(.el-card__body) {
+  overflow: visible;
+}
+
+.flex {
+  display: flex;
+}
+.justify-between {
+  justify-content: space-between;
+}
+.items-center {
+  align-items: center;
+}
+.font-bold {
+  font-weight: bold;
+}
 </style>

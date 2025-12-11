@@ -1,136 +1,218 @@
-<!-- src/views/data-management/QuarterlyReport.vue -->
 <template>
-  <div class="page">
-    <el-card>
-      <div class="header">
-        <div class="title-block">
-          <h2>季度报表</h2>
-          <span class="subtitle">按季度统计手办销售情况</span>
-        </div>
-        <el-select v-model="selectedQuarter" placeholder="选择季度" style="width: 200px">
-          <el-option label="第一季度 (Q1)" value="Q1" />
-          <el-option label="第二季度 (Q2)" value="Q2" />
-          <el-option label="第三季度 (Q3)" value="Q3" />
-          <el-option label="第四季度 (Q4)" value="Q4" />
-        </el-select>
+  <div class="page-wrapper">
+    <header class="page-header">
+      <h2>销售季报表</h2>
+      <div class="filters">
+        <label>
+          年份：
+          <select v-model="selectedYear">
+            <option v-for="year in yearOptions" :key="year" :value="year">
+              {{ year }}
+            </option>
+          </select>
+        </label>
       </div>
+    </header>
 
-      <el-divider />
-
-      <div class="summary-row" v-if="quarterRows.length">
-        <div class="summary-item">
-          <div class="summary-label">总订单量（件）</div>
-          <div class="summary-value">{{ totalQuantity }}</div>
-        </div>
-        <div class="summary-item">
-          <div class="summary-label">总销售额（元）</div>
-          <div class="summary-value">{{ totalRevenue.toFixed(2) }}</div>
+    <section class="kpi-cards">
+      <div class="kpi-card" v-for="item in quarters" :key="item.quarter">
+        <div class="kpi-label">Q{{ item.quarter }} 销售额（¥）</div>
+        <div class="kpi-value">{{ item.revenue.toFixed(2) }}</div>
+        <div class="kpi-sub">
+          订单数：{{ item.orderCount }}
         </div>
       </div>
+    </section>
 
-      <el-table :data="quarterByProduct" stripe>
-        <el-table-column prop="productName" label="产品" min-width="220" />
-        <el-table-column prop="totalQuantity" label="总数量" width="120" />
-        <el-table-column prop="totalRevenue" label="总销售额(元)" width="150" />
-      </el-table>
+    <section class="chart-section">
+      <h3>季度销售额趋势</h3>
+      <div ref="quarterRevenueRef" class="chart-container" />
+    </section>
 
-      <el-empty v-if="!quarterByProduct.length" description="当前季度暂无数据" />
-    </el-card>
+    <section class="chart-section">
+      <h3>季度订单数对比</h3>
+      <div ref="quarterOrderRef" class="chart-container" />
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import * as echarts from 'echarts'
 import axios from 'axios'
-import type { FigureOrder } from '@/types/report'
 
-interface QuarterProductRow {
-  productName: string
-  totalQuantity: number
-  totalRevenue: number
+interface QuarterRecord {
+  quarter: number
+  orderCount: number
+  revenue: number
 }
 
-const allOrders = ref<FigureOrder[]>([])
-const selectedQuarter = ref<'Q1' | 'Q2' | 'Q3' | 'Q4'>('Q1')
+interface QuarterlyReportApiResp {
+  code: number
+  data: {
+    quarters: QuarterRecord[]
+  }
+}
 
-onMounted(async () => {
-  const res = await axios.get<FigureOrder[]>('/api/figure/orders')
-  allOrders.value = res.data
+const currentYear = new Date().getFullYear()
+const yearOptions = [currentYear - 1, currentYear, currentYear + 1]
+const selectedYear = ref(currentYear)
+
+const quarters = ref<QuarterRecord[]>([])
+
+const quarterRevenueRef = ref<HTMLDivElement>()
+const quarterOrderRef = ref<HTMLDivElement>()
+let quarterRevenueChart: echarts.ECharts | null = null
+let quarterOrderChart: echarts.ECharts | null = null
+
+const renderQuarterRevenueChart = () => {
+  if (!quarterRevenueRef.value || quarters.value.length === 0) return
+  if (!quarterRevenueChart) {
+    quarterRevenueChart = echarts.init(quarterRevenueRef.value)
+  }
+  const xAxis = quarters.value.map((q) => `Q${q.quarter}`)
+  const revenues = quarters.value.map((q) => Number(q.revenue.toFixed(2)))
+
+  const option: echarts.EChartsOption = {
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'category', data: xAxis },
+    yAxis: { type: 'value', name: '销售额' },
+    series: [
+      {
+        name: '销售额',
+        type: 'line',
+        smooth: true,
+        data: revenues,
+      },
+    ],
+  }
+  quarterRevenueChart.setOption(option)
+  quarterRevenueChart.resize()
+}
+
+const renderQuarterOrderChart = () => {
+  if (!quarterOrderRef.value || quarters.value.length === 0) return
+  if (!quarterOrderChart) {
+    quarterOrderChart = echarts.init(quarterOrderRef.value)
+  }
+
+  const xAxis = quarters.value.map((q) => `Q${q.quarter}`)
+  const orders = quarters.value.map((q) => q.orderCount)
+
+  const option: echarts.EChartsOption = {
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'category', data: xAxis },
+    yAxis: { type: 'value', name: '订单数' },
+    series: [
+      {
+        name: '订单数',
+        type: 'bar',
+        data: orders,
+      },
+    ],
+  }
+  quarterOrderChart.setOption(option)
+  quarterOrderChart.resize()
+}
+
+const renderAllCharts = () => {
+  renderQuarterRevenueChart()
+  renderQuarterOrderChart()
+}
+
+const handleResize = () => {
+  quarterRevenueChart?.resize()
+  quarterOrderChart?.resize()
+}
+
+const fetchQuarterlyReport = async () => {
+  try {
+    const resp = await axios.get<QuarterlyReportApiResp>('/api/report/quarterly', {
+      params: { year: selectedYear.value },
+    })
+    quarters.value = resp.data.data.quarters
+    renderAllCharts()
+  } catch (e) {
+    console.error('加载季报失败', e)
+  }
+}
+
+onMounted(() => {
+  fetchQuarterlyReport()
+  window.addEventListener('resize', handleResize)
 })
 
-// 月份 → 季度
-function getQuarter(date: string): 'Q1' | 'Q2' | 'Q3' | 'Q4' {
-  const m = Number(date.slice(5, 7))
-  if (m <= 3) return 'Q1'
-  if (m <= 6) return 'Q2'
-  if (m <= 9) return 'Q3'
-  return 'Q4'
-}
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
+  quarterRevenueChart?.dispose()
+  quarterOrderChart?.dispose()
+  quarterRevenueChart = null
+  quarterOrderChart = null
+})
 
-// 当前季度明细
-const quarterRows = computed<FigureOrder[]>(() =>
-  allOrders.value.filter((item) => getQuarter(item.date) === selectedQuarter.value),
-)
-
-// 汇总
-const totalQuantity = computed<number>(() =>
-  quarterRows.value.reduce((sum, item) => sum + item.quantity, 0),
-)
-const totalRevenue = computed<number>(() =>
-  quarterRows.value.reduce((sum, item) => sum + item.revenue, 0),
-)
-
-// 按产品汇总
-const quarterByProduct = computed<QuarterProductRow[]>(() => {
-  const map = new Map<string, QuarterProductRow>()
-
-  quarterRows.value.forEach((item) => {
-    const existing = map.get(item.productName) ?? {
-      productName: item.productName,
-      totalQuantity: 0,
-      totalRevenue: 0,
-    }
-
-    existing.totalQuantity += item.quantity
-    existing.totalRevenue += item.revenue
-    map.set(item.productName, existing)
-  })
-
-  return Array.from(map.values())
+watch(selectedYear, () => {
+  fetchQuarterlyReport()
 })
 </script>
 
 <style scoped>
-.page {
-  padding: 20px;
-}
-.header {
+.page-wrapper {
+  padding: 16px 20px;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 16px;
 }
-.title-block h2 {
+.page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.page-header h2 {
   margin: 0;
+  font-size: 20px;
 }
-.subtitle {
-  font-size: 12px;
-  color: #909399;
-}
-.summary-row {
+.filters {
   display: flex;
-  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
 }
-.summary-item {
-  flex: 1;
-  text-align: center;
+.kpi-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
 }
-.summary-label {
-  font-size: 12px;
-  color: #909399;
+.kpi-card {
+  padding: 12px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
-.summary-value {
+.kpi-label {
+  font-size: 13px;
+  color: #64748b;
+}
+.kpi-value {
+  margin-top: 6px;
   font-size: 18px;
   font-weight: 600;
+}
+.kpi-sub {
   margin-top: 4px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.chart-section {
+  padding: 12px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+.chart-section h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+.chart-container {
+  width: 100%;
+  height: 320px;
 }
 </style>

@@ -18,38 +18,38 @@
                 <div class="circle circle-1"></div>
                 <div class="circle circle-2"></div>
             </div>
-            
+
             <!-- 右侧：登录表单区 -->
             <div class="login-section">
                 <div class="login-header">
                     <h2>管理员登录</h2>
                     <p>请输入您的工号或管理员账号</p>
                 </div>
-                
+
                 <form class="login-form" @submit.prevent="handleLogin">
                     <div class="form-group">
                         <label for="username">账号</label>
                         <div class="input-wrapper">
                             <i class="fas fa-user input-icon"></i>
-                            <input 
-                                type="text" 
-                                id="username" 
+                            <input
+                                type="text"
+                                id="username"
                                 v-model="loginForm.username"
-                                placeholder="请输入管理员账号" 
+                                placeholder="请输入管理员账号"
                                 required
                             >
                         </div>
                     </div>
-                    
+
                     <div class="form-group">
                         <label for="password">密码</label>
                         <div class="input-wrapper">
                             <i class="fas fa-lock input-icon"></i>
-                            <input 
-                                :type="showPassword ? 'text' : 'password'" 
-                                id="password" 
+                            <input
+                                :type="showPassword ? 'text' : 'password'"
+                                id="password"
                                 v-model="loginForm.password"
-                                placeholder="请输入密码" 
+                                placeholder="请输入密码"
                                 required
                             >
                             <span class="password-toggle" @click="togglePassword">
@@ -57,7 +57,7 @@
                             </span>
                         </div>
                     </div>
-                    
+
                     <div class="form-options">
                         <div class="remember-me">
                             <input type="checkbox" id="remember" v-model="loginForm.remember">
@@ -65,11 +65,11 @@
                         </div>
                         <a href="#" class="forgot-password">忘记密码？</a>
                     </div>
-                    
+
                     <button type="submit" class="login-btn">
                         登录系统
                     </button>
-                    
+
                     <div class="signup-link">
                         还没有员工账号？ <a href="#">联系店长</a>
                     </div>
@@ -104,7 +104,7 @@ const togglePassword = () => {
 const handleLogin = () => {
     // 这里可以添加真实的登录验证逻辑
     console.log('Logging in with:', loginForm);
-    
+
     // 模拟登录成功跳转
     // 注意：原本代码中的 router-link 在 button 里是不规范的写法
     // 这里改为编程式导航
@@ -367,7 +367,7 @@ const handleLogin = () => {
         height: auto;
         width: 100%;
     }
-    
+
     .welcome-section {
         padding: 30px;
         min-height: 200px;

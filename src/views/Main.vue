@@ -126,9 +126,11 @@ export default defineComponent({
 }
 /* 新增固定菜单样式 */
 .menu-col {
-  height: 100vh;
-  /* 让 Element Plus 的 el-col 自己负责布局，不要再 fixed 了 */
-  position: relative;
+  position: fixed; /* 固定定位 */
+  top: 0;
+  left: 0;
+  height: 100vh; /* 占满整个视口高度 */
+  z-index: 10; /* 确保在内容上方 */
 }
 /* 调整主内容区位置，避免被菜单遮挡 */
 .main-content {
@@ -191,11 +193,14 @@ export default defineComponent({
 
 /* 主内容区布局优化 */
 .el-row.tac {
+  display: flex;
   min-height: 100vh;
 }
-/* main-content 本身已经有 padding 和背景色了，这里可以不再额外设置 */
-.el-row.tac > .main-content {
+
+.el-row.tac > div:not(.el-col) {
   flex: 1;
+  padding: 20px;
+  background-color: #f5f7fa;
 }
 </style>
 

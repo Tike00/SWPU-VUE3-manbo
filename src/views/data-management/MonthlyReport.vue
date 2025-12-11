@@ -1,133 +1,240 @@
-<!-- src/views/data-management/MonthlyReport.vue -->
 <template>
-  <div class="page">
-    <el-card>
-      <div class="header">
-        <div class="title-block">
-          <h2>月报表</h2>
-          <span class="subtitle">按月份统计手办销售情况</span>
-        </div>
-        <el-date-picker
-          v-model="selectedMonth"
-          type="month"
-          value-format="YYYY-MM"
-          placeholder="选择月份"
-          style="width: 200px"
-        />
+  <div class="page-wrapper">
+    <header class="page-header">
+      <h2>销售月报表</h2>
+      <div class="filters">
+        <label>
+          年份：
+          <select v-model="selectedYear">
+            <option v-for="year in yearOptions" :key="year" :value="year">
+              {{ year }}
+            </option>
+          </select>
+        </label>
+        <label>
+          月份：
+          <select v-model="selectedMonth">
+            <option v-for="m in 12" :key="m" :value="m">
+              {{ m }} 月
+            </option>
+          </select>
+        </label>
       </div>
+    </header>
 
-      <el-divider />
-
-      <div class="summary-row" v-if="monthlyRows.length">
-        <div class="summary-item">
-          <div class="summary-label">总订单量（件）</div>
-          <div class="summary-value">{{ totalQuantity }}</div>
-        </div>
-        <div class="summary-item">
-          <div class="summary-label">总销售额（元）</div>
-          <div class="summary-value">{{ totalRevenue.toFixed(2) }}</div>
-        </div>
+    <section class="kpi-cards">
+      <div class="kpi-card">
+        <div class="kpi-label">总订单数</div>
+        <div class="kpi-value">{{ summary.orderCount }}</div>
       </div>
+      <div class="kpi-card">
+        <div class="kpi-label">总销售额（¥）</div>
+        <div class="kpi-value">{{ summary.revenue.toFixed(2) }}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">日均销售额（¥）</div>
+        <div class="kpi-value">{{ summary.avgDailyRevenue.toFixed(2) }}</div>
+      </div>
+    </section>
 
-      <el-table :data="monthlyByProduct" stripe>
-        <el-table-column prop="productName" label="产品" min-width="220" />
-        <el-table-column prop="totalQuantity" label="总数量" width="120" />
-        <el-table-column prop="totalRevenue" label="总销售额(元)" width="150" />
-      </el-table>
+    <section class="chart-section">
+      <h3>本月每日销售额</h3>
+      <div ref="dailyRevenueRef" class="chart-container" />
+    </section>
 
-      <el-empty v-if="!monthlyByProduct.length" description="当前月份暂无数据" />
-    </el-card>
+    <section class="chart-section">
+      <h3>本月每日订单数</h3>
+      <div ref="dailyOrderRef" class="chart-container" />
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import * as echarts from 'echarts'
 import axios from 'axios'
-import type { FigureOrder } from '@/types/report'
 
-interface MonthlyProductRow {
-  productName: string
-  totalQuantity: number
-  totalRevenue: number
+interface MonthlySummary {
+  orderCount: number
+  revenue: number
+  avgDailyRevenue: number
 }
 
-const allOrders = ref<FigureOrder[]>([])
-const selectedMonth = ref<string>('')
-
-// 加载数据
-onMounted(async () => {
-  const res = await axios.get<FigureOrder[]>('/api/figure/orders')
-  allOrders.value = res.data
-  if (allOrders.value.length > 0) {
-    selectedMonth.value = allOrders.value[0]!.date.slice(0, 7) // YYYY-MM
+interface MonthlyReportApiResp {
+  code: number
+  data: {
+    summary: MonthlySummary
+    days: number[]
+    orders: number[]
+    revenues: number[]
   }
+}
+
+const currentYear = new Date().getFullYear()
+const yearOptions = [currentYear - 1, currentYear, currentYear + 1]
+const selectedYear = ref(currentYear)
+const selectedMonth = ref(new Date().getMonth() + 1)
+
+const summary = reactive<MonthlySummary>({
+  orderCount: 0,
+  revenue: 0,
+  avgDailyRevenue: 0,
 })
 
-// 当前月的明细
-const monthlyRows = computed<FigureOrder[]>(() =>
-  allOrders.value.filter((item) => item.date.slice(0, 7) === selectedMonth.value),
-)
+const days = ref<number[]>([])
+const orders = ref<number[]>([])
+const revenues = ref<number[]>([])
 
-// 当前月汇总：总数量、总金额
-const totalQuantity = computed<number>(() =>
-  monthlyRows.value.reduce((sum, item) => sum + item.quantity, 0),
-)
+const dailyRevenueRef = ref<HTMLDivElement>()
+const dailyOrderRef = ref<HTMLDivElement>()
+let dailyRevenueChart: echarts.ECharts | null = null
+let dailyOrderChart: echarts.ECharts | null = null
 
-const totalRevenue = computed<number>(() =>
-  monthlyRows.value.reduce((sum, item) => sum + item.revenue, 0),
-)
+const renderDailyRevenueChart = () => {
+  if (!dailyRevenueRef.value || days.value.length === 0) return
+  if (!dailyRevenueChart) {
+    dailyRevenueChart = echarts.init(dailyRevenueRef.value)
+  }
+  const option: echarts.EChartsOption = {
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'category', data: days.value },
+    yAxis: { type: 'value', name: '销售额' },
+    series: [
+      {
+        name: '销售额',
+        type: 'line',
+        smooth: true,
+        data: revenues.value,
+      },
+    ],
+  }
+  dailyRevenueChart.setOption(option)
+  dailyRevenueChart.resize()
+}
 
-// 按产品汇总
-const monthlyByProduct = computed<MonthlyProductRow[]>(() => {
-  const map = new Map<string, MonthlyProductRow>()
+const renderDailyOrderChart = () => {
+  if (!dailyOrderRef.value || days.value.length === 0) return
+  if (!dailyOrderChart) {
+    dailyOrderChart = echarts.init(dailyOrderRef.value)
+  }
+  const option: echarts.EChartsOption = {
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'category', data: days.value },
+    yAxis: { type: 'value', name: '订单数' },
+    series: [
+      {
+        name: '订单数',
+        type: 'bar',
+        data: orders.value,
+      },
+    ],
+  }
+  dailyOrderChart.setOption(option)
+  dailyOrderChart.resize()
+}
 
-  monthlyRows.value.forEach((item) => {
-    const existing = map.get(item.productName) ?? {
-      productName: item.productName,
-      totalQuantity: 0,
-      totalRevenue: 0,
-    }
+const renderAllCharts = () => {
+  renderDailyRevenueChart()
+  renderDailyOrderChart()
+}
 
-    existing.totalQuantity += item.quantity
-    existing.totalRevenue += item.revenue
-    map.set(item.productName, existing)
-  })
+const handleResize = () => {
+  dailyRevenueChart?.resize()
+  dailyOrderChart?.resize()
+}
 
-  return Array.from(map.values())
+const fetchMonthlyReport = async () => {
+  try {
+    const resp = await axios.get<MonthlyReportApiResp>('/api/report/monthly', {
+      params: {
+        year: selectedYear.value,
+        month: selectedMonth.value,
+      },
+    })
+    const data = resp.data.data
+    summary.orderCount = data.summary.orderCount
+    summary.revenue = data.summary.revenue
+    summary.avgDailyRevenue = data.summary.avgDailyRevenue
+    days.value = data.days
+    orders.value = data.orders
+    revenues.value = data.revenues
+    renderAllCharts()
+  } catch (e) {
+    console.error('加载月报失败', e)
+  }
+}
+
+onMounted(() => {
+  fetchMonthlyReport()
+  window.addEventListener('resize', handleResize)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
+  dailyRevenueChart?.dispose()
+  dailyOrderChart?.dispose()
+  dailyRevenueChart = null
+  dailyOrderChart = null
+})
+
+watch([selectedYear, selectedMonth], () => {
+  fetchMonthlyReport()
 })
 </script>
 
 <style scoped>
-.page {
-  padding: 20px;
-}
-.header {
+.page-wrapper {
+  padding: 16px 20px;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 16px;
 }
-.title-block h2 {
+.page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.page-header h2 {
   margin: 0;
+  font-size: 20px;
 }
-.subtitle {
-  font-size: 12px;
-  color: #909399;
-}
-.summary-row {
+.filters {
   display: flex;
-  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
 }
-.summary-item {
-  flex: 1;
-  text-align: center;
+.kpi-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
 }
-.summary-label {
-  font-size: 12px;
-  color: #909399;
+.kpi-card {
+  padding: 12px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
-.summary-value {
-  font-size: 18px;
+.kpi-label {
+  font-size: 13px;
+  color: #64748b;
+}
+.kpi-value {
+  margin-top: 6px;
+  font-size: 20px;
   font-weight: 600;
-  margin-top: 4px;
+}
+.chart-section {
+  padding: 12px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+.chart-section h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+.chart-container {
+  width: 100%;
+  height: 320px;
 }
 </style>

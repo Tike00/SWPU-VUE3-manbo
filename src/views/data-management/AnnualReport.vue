@@ -1,226 +1,230 @@
-<!-- src/views/data-management/AnnualReport.vue -->
 <template>
-  <div class="page">
-    <el-card class="card">
-      <!-- 顶部：标题 + 年份输入 -->
-      <div class="header">
-        <div class="title-block">
-          <h2>年度报表</h2>
-          <span class="subtitle">按年份 & 月份汇总手办销售情况</span>
-        </div>
-        <el-input v-model="selectedYear" placeholder="输入年份，例如：2025" style="width: 200px" />
+  <div class="page-wrapper">
+    <header class="page-header">
+      <h2>销售年报表</h2>
+      <div class="filters">
+        <label>
+          年份：
+          <select v-model="selectedYear">
+            <option v-for="year in yearOptions" :key="year" :value="year">
+              {{ year }}
+            </option>
+          </select>
+        </label>
       </div>
+    </header>
 
-      <el-divider />
-
-      <!-- 中部：年度汇总统计 -->
-      <div class="summary-row" v-if="yearRows.length">
-        <div class="summary-item">
-          <div class="summary-label">年度总订单量（件）</div>
-          <div class="summary-value">{{ totalQuantity }}</div>
-        </div>
-        <div class="summary-item">
-          <div class="summary-label">年度总销售额（元）</div>
-          <div class="summary-value">{{ totalRevenue.toFixed(2) }}</div>
-        </div>
+    <section class="kpi-cards">
+      <div class="kpi-card">
+        <div class="kpi-label">年度总订单数</div>
+        <div class="kpi-value">{{ summary.orderCount }}</div>
       </div>
-
-      <!-- 主体内容：左表格 + 右侧 IP 汇总表格 -->
-      <div class="content-row">
-        <!-- 左侧：按月份汇总 -->
-        <div class="main-table">
-          <h3 class="block-title">按月份汇总</h3>
-          <el-table :data="yearSummaryByMonth" stripe style="width: 100%">
-            <el-table-column prop="month" label="月份" min-width="120" />
-            <el-table-column prop="totalQuantity" label="总数量" min-width="120" />
-            <el-table-column prop="totalRevenue" label="总销售额(元)" min-width="150" />
-          </el-table>
-
-          <el-empty
-            v-if="!yearSummaryByMonth.length"
-            description="当前年份暂无月份数据"
-            :image-size="80"
-          />
-        </div>
-
-        <!-- 右侧：按 IP 维度汇总 -->
-        <div class="side-panel">
-          <h3 class="block-title">按 IP 汇总</h3>
-          <el-table
-            :data="ipSummary"
-            size="small"
-            stripe
-            style="width: 100%"
-            v-if="ipSummary.length"
-          >
-            <el-table-column prop="ip" label="IP" min-width="120" />
-            <el-table-column prop="totalQuantity" label="总数量" min-width="100" />
-            <el-table-column prop="totalRevenue" label="总销售额(元)" min-width="120" />
-          </el-table>
-
-          <el-empty v-else description="当前年份暂无 IP 数据" :image-size="80" />
-        </div>
+      <div class="kpi-card">
+        <div class="kpi-label">年度总销售额（¥）</div>
+        <div class="kpi-value">{{ summary.revenue.toFixed(2) }}</div>
       </div>
-    </el-card>
+      <div class="kpi-card">
+        <div class="kpi-label">月均销售额（¥）</div>
+        <div class="kpi-value">{{ summary.avgMonthlyRevenue.toFixed(2) }}</div>
+      </div>
+    </section>
+
+    <section class="chart-section">
+      <h3>月度销售额趋势</h3>
+      <div ref="monthRevenueRef" class="chart-container" />
+    </section>
+
+    <section class="chart-section">
+      <h3>月度订单数对比</h3>
+      <div ref="monthOrderRef" class="chart-container" />
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import * as echarts from 'echarts'
 import axios from 'axios'
-import type { FigureOrder } from '@/types/report'
 
-interface YearMonthRow {
-  month: string // YYYY-MM
-  totalQuantity: number
-  totalRevenue: number
+interface AnnualSummary {
+  orderCount: number
+  revenue: number
+  avgMonthlyRevenue: number
 }
 
-interface IpSummaryRow {
-  ip: string
-  totalQuantity: number
-  totalRevenue: number
-}
-
-const allOrders = ref<FigureOrder[]>([])
-const selectedYear = ref<string>('2025')
-
-onMounted(async () => {
-  const res = await axios.get<FigureOrder[]>('/api/figure/orders')
-  const data = res.data ?? []
-
-  allOrders.value = data
-
-  const first = data[0]
-  if (first) {
-    selectedYear.value = first.date.slice(0, 4)
-  } else {
-    selectedYear.value = '2025'
+interface AnnualReportApiResp {
+  code: number
+  data: {
+    summary: AnnualSummary
+    months: number[]
+    orders: number[]
+    revenues: number[]
   }
+}
+
+const currentYear = new Date().getFullYear()
+const yearOptions = [currentYear - 1, currentYear, currentYear + 1]
+const selectedYear = ref(currentYear)
+
+const summary = reactive<AnnualSummary>({
+  orderCount: 0,
+  revenue: 0,
+  avgMonthlyRevenue: 0,
 })
 
-// 当前年份所有明细
-const yearRows = computed<FigureOrder[]>(() =>
-  allOrders.value.filter((item) => item.date.slice(0, 4) === selectedYear.value),
-)
+const months = ref<number[]>([])
+const orders = ref<number[]>([])
+const revenues = ref<number[]>([])
 
-// 年度汇总
-const totalQuantity = computed<number>(() =>
-  yearRows.value.reduce((sum, item) => sum + item.quantity, 0),
-)
-const totalRevenue = computed<number>(() =>
-  yearRows.value.reduce((sum, item) => sum + item.revenue, 0),
-)
+const monthRevenueRef = ref<HTMLDivElement>()
+const monthOrderRef = ref<HTMLDivElement>()
+let monthRevenueChart: echarts.ECharts | null = null
+let monthOrderChart: echarts.ECharts | null = null
 
-// 按月份汇总
-const yearSummaryByMonth = computed<YearMonthRow[]>(() => {
-  const map = new Map<string, YearMonthRow>()
+const renderMonthRevenueChart = () => {
+  if (!monthRevenueRef.value || months.value.length === 0) return
+  if (!monthRevenueChart) {
+    monthRevenueChart = echarts.init(monthRevenueRef.value)
+  }
+  const xAxis = months.value.map((m) => `${m}月`)
+  const option: echarts.EChartsOption = {
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'category', data: xAxis },
+    yAxis: { type: 'value', name: '销售额' },
+    series: [
+      {
+        name: '销售额',
+        type: 'line',
+        smooth: true,
+        data: revenues.value,
+      },
+    ],
+  }
+  monthRevenueChart.setOption(option)
+  monthRevenueChart.resize()
+}
 
-  yearRows.value.forEach((item) => {
-    const month = item.date.slice(0, 7) // YYYY-MM
-    const existing = map.get(month) ?? {
-      month,
-      totalQuantity: 0,
-      totalRevenue: 0,
-    }
+const renderMonthOrderChart = () => {
+  if (!monthOrderRef.value || months.value.length === 0) return
+  if (!monthOrderChart) {
+    monthOrderChart = echarts.init(monthOrderRef.value)
+  }
+  const xAxis = months.value.map((m) => `${m}月`)
+  const option: echarts.EChartsOption = {
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'category', data: xAxis },
+    yAxis: { type: 'value', name: '订单数' },
+    series: [
+      {
+        name: '订单数',
+        type: 'bar',
+        data: orders.value,
+      },
+    ],
+  }
+  monthOrderChart.setOption(option)
+  monthOrderChart.resize()
+}
 
-    existing.totalQuantity += item.quantity
-    existing.totalRevenue += item.revenue
-    map.set(month, existing)
-  })
+const renderAllCharts = () => {
+  renderMonthRevenueChart()
+  renderMonthOrderChart()
+}
 
-  // 按月份排序
-  return Array.from(map.values()).sort((a, b) => (a.month > b.month ? 1 : -1))
+const handleResize = () => {
+  monthRevenueChart?.resize()
+  monthOrderChart?.resize()
+}
+
+const fetchAnnualReport = async () => {
+  try {
+    const resp = await axios.get<AnnualReportApiResp>('/api/report/annual', {
+      params: { year: selectedYear.value },
+    })
+    const data = resp.data.data
+    summary.orderCount = data.summary.orderCount
+    summary.revenue = data.summary.revenue
+    summary.avgMonthlyRevenue = data.summary.avgMonthlyRevenue
+    months.value = data.months
+    orders.value = data.orders
+    revenues.value = data.revenues
+    renderAllCharts()
+  } catch (e) {
+    console.error('加载年报失败', e)
+  }
+}
+
+onMounted(() => {
+  fetchAnnualReport()
+  window.addEventListener('resize', handleResize)
 })
 
-// 按 IP 维度汇总（用于右侧表格）
-const ipSummary = computed<IpSummaryRow[]>(() => {
-  const map = new Map<string, IpSummaryRow>()
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
+  monthRevenueChart?.dispose()
+  monthOrderChart?.dispose()
+  monthRevenueChart = null
+  monthOrderChart = null
+})
 
-  yearRows.value.forEach((item) => {
-    const key = item.ip
-    const existing = map.get(key) ?? {
-      ip: key,
-      totalQuantity: 0,
-      totalRevenue: 0,
-    }
-
-    existing.totalQuantity += item.quantity
-    existing.totalRevenue += item.revenue
-    map.set(key, existing)
-  })
-
-  return Array.from(map.values())
+watch(selectedYear, () => {
+  fetchAnnualReport()
 })
 </script>
 
 <style scoped>
-.page {
-  padding: 20px;
-}
-
-/* 让卡片本身尽量铺满父容器 */
-.card {
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.header {
+.page-wrapper {
+  padding: 16px 20px;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 16px;
 }
-
-.title-block h2 {
+.page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.page-header h2 {
   margin: 0;
+  font-size: 20px;
 }
-.subtitle {
-  font-size: 12px;
-  color: #909399;
-}
-
-/* 顶部 summary */
-.summary-row {
+.filters {
   display: flex;
-  margin-bottom: 16px;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
 }
-.summary-item {
-  flex: 1;
-  text-align: center;
+.kpi-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
 }
-.summary-label {
-  font-size: 12px;
-  color: #909399;
+.kpi-card {
+  padding: 12px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
-.summary-value {
-  font-size: 18px;
+.kpi-label {
+  font-size: 13px;
+  color: #64748b;
+}
+.kpi-value {
+  margin-top: 6px;
+  font-size: 20px;
   font-weight: 600;
-  margin-top: 4px;
 }
-
-/* 主体左右布局 */
-.content-row {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  margin-top: 8px;
+.chart-section {
+  padding: 12px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
-
-/* 左侧主表格区域（占大头） */
-.main-table {
-  flex: 2;
+.chart-section h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
 }
-
-/* 右侧修饰 / 汇总区域（占较小部分） */
-.side-panel {
-  flex: 1;
-}
-
-.block-title {
-  font-size: 14px;
-  font-weight: 600;
-  margin: 0 0 8px 0;
-  color: #606266;
+.chart-container {
+  width: 100%;
+  height: 320px;
 }
 </style>
