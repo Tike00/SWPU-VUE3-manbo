@@ -17,13 +17,21 @@
 
         <div class="info-block">
           <div class="name-row">
-            <span class="username">无敌曼波大王</span>
+            <span class="username">{{ profile.nickname }}</span>
             <el-tag type="success" effect="dark" class="tag-item">
               哈基米文化核心粉丝
             </el-tag>
             <el-tag type="warning" effect="plain" class="tag-item">
               曼波手办重度玩家
             </el-tag>
+
+            <!-- 撑开到右侧 -->
+            <span class="flex-spacer"></span>
+
+            <!-- 编辑按钮 -->
+            <el-button size="small" type="primary" @click="openEditDialog">
+              编辑资料
+            </el-button>
           </div>
 
           <div class="signature">
@@ -48,7 +56,7 @@
           <h3 class="block-title">基础信息</h3>
           <el-descriptions :column="1" border>
             <el-descriptions-item label="昵称">
-              无敌曼波大王
+              {{ profile.nickname }}
             </el-descriptions-item>
             <el-descriptions-item label="偏好 IP">
               <el-tag
@@ -125,15 +133,130 @@
         </div>
       </div>
     </el-card>
+
+    <!-- 编辑资料弹窗 -->
+    <el-dialog
+      v-model="editVisible"
+      title="编辑个人资料"
+      width="500px"
+    >
+      <el-form :model="editForm" label-width="90px">
+        <el-form-item label="昵称">
+          <el-input v-model="editForm.nickname" />
+        </el-form-item>
+
+        <el-form-item label="签名">
+          <el-input
+            v-model="editForm.signature"
+            type="textarea"
+            :rows="2"
+          />
+        </el-form-item>
+
+        <el-form-item label="偏好 IP">
+          <el-select
+            v-model="editForm.favoriteIps"
+            multiple
+            placeholder="选择偏好 IP"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="ip in ipOptions"
+              :key="ip"
+              :label="ip"
+              :value="ip"
+            />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="偏好品类">
+          <el-select
+            v-model="editForm.favoriteCategories"
+            multiple
+            placeholder="选择偏好品类"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="cate in categoryOptions"
+              :key="cate"
+              :label="cate"
+              :value="cate"
+            />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="今年入手">
+          <el-input-number v-model="editForm.yearFigures" :min="0" />
+        </el-form-item>
+
+        <el-form-item label="已用预算">
+          <el-input-number
+            v-model="editForm.budgetUsed"
+            :min="0"
+            :max="editForm.budgetTotal"
+          />
+        </el-form-item>
+
+        <el-form-item label="总预算">
+          <el-input-number v-model="editForm.budgetTotal" :min="0" />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="editVisible = false">取 消</el-button>
+          <el-button type="primary" @click="saveEdit">保 存</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import avatarSrc from '@/assets/avatar/manbo.jpg'
 
-// 如果你要满足多单词组件名的 ESLint 规则，可以加这一行：
+// 如果你要满足多单词组件名的 ESLint 规则，可以加：
 // defineOptions({ name: 'UserProfile' })
+
+// ---------------- 类型声明 ----------------
+interface ProfileInfo {
+  uid: string
+  nickname: string
+  joinDate: string
+  lastLogin: string
+  favoriteIps: string[]
+  favoriteCategories: string[]
+  yearFigures: number
+  budgetUsed: number
+  budgetTotal: number
+}
+
+interface IpStat {
+  name: string
+  percent: number
+}
+
+interface Activity {
+  time: string
+  title: string
+  desc: string
+}
+
+interface EditForm {
+  nickname: string
+  signature: string
+  favoriteIps: string[]
+  favoriteCategories: string[]
+  yearFigures: number
+  budgetUsed: number
+  budgetTotal: number
+}
+
+// ---------------- 静态选项 ----------------
+const ipOptions: string[] = ['曼波', '耄耋', '哈基米文化', '原创角色']
+const categoryOptions: string[] = ['PVC景品', 'GK树脂', '桌面摆件', '盒蛋盲盒', '周边配件']
 
 // 头像绑定本地图片
 const avatarUrl = ref<string>(avatarSrc)
@@ -142,8 +265,9 @@ const avatarUrl = ref<string>(avatarSrc)
 const signature = ref<string>('无名小基，还是哈气天下！')
 
 // 个人基础信息（Mock）
-const profile = ref({
+const profile = ref<ProfileInfo>({
   uid: 'MAMBO-0001',
+  nickname: '无敌曼波大王',
   joinDate: '2025-01-01',
   lastLogin: '2025-12-11 20:20',
   favoriteIps: ['曼波', '耄耋', '哈基米文化'],
@@ -162,11 +286,6 @@ const budgetPercent = computed(() =>
 )
 
 // IP 偏好占比（Mock 数据）
-interface IpStat {
-  name: string
-  percent: number
-}
-
 const ipStats = ref<IpStat[]>([
   { name: '曼波', percent: 45 },
   { name: '哈基米文化', percent: 35 },
@@ -174,12 +293,6 @@ const ipStats = ref<IpStat[]>([
 ])
 
 // 最近活动（Mock）
-interface Activity {
-  time: string
-  title: string
-  desc: string
-}
-
 const activities = ref<Activity[]>([
   {
     time: '2025-12-10',
@@ -197,6 +310,50 @@ const activities = ref<Activity[]>([
     desc: '清点本年度入手记录，准备生成年度报告。',
   },
 ])
+
+// ---------------- 编辑弹窗相关 ----------------
+const editVisible = ref<boolean>(false)
+const editForm = ref<EditForm>({
+  nickname: '',
+  signature: '',
+  favoriteIps: [],
+  favoriteCategories: [],
+  yearFigures: 0,
+  budgetUsed: 0,
+  budgetTotal: 0,
+})
+
+function openEditDialog(): void {
+  const p = profile.value
+
+  editForm.value = {
+    nickname: p.nickname,
+    signature: signature.value,
+    favoriteIps: [...p.favoriteIps],
+    favoriteCategories: [...p.favoriteCategories],
+    yearFigures: p.yearFigures,
+    budgetUsed: p.budgetUsed,
+    budgetTotal: p.budgetTotal,
+  }
+
+  editVisible.value = true
+}
+
+function saveEdit(): void {
+  const form = editForm.value
+  const p = profile.value
+
+  p.nickname = form.nickname
+  p.favoriteIps = [...form.favoriteIps]
+  p.favoriteCategories = [...form.favoriteCategories]
+  p.yearFigures = form.yearFigures
+  p.budgetUsed = form.budgetUsed
+  p.budgetTotal = form.budgetTotal
+  signature.value = form.signature
+
+  editVisible.value = false
+  ElMessage.success('个人资料已更新')
+}
 </script>
 
 <style scoped>
@@ -234,6 +391,10 @@ const activities = ref<Activity[]>([
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
+}
+
+.flex-spacer {
+  flex: 1;
 }
 
 .username {
@@ -345,5 +506,11 @@ const activities = ref<Activity[]>([
 /* 工具类 */
 .mr-4 {
   margin-right: 4px;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 </style>
