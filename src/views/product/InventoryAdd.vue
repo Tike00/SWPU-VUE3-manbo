@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, reactive } from "vue";
 import { ElMessage, ElMessageBox, ElNotification } from "element-plus";
 import axios from "axios";
-import { 
+import {
   Box,
   Loading,
   DocumentAdd,
@@ -78,23 +78,23 @@ const form = reactive({
 // 计算属性
 const filteredProducts = computed(() => {
   let filtered = productList.value;
-  
+
   if (filterForm.ip) {
     filtered = filtered.filter(p => p.ip === filterForm.ip);
   }
-  
+
   if (filterForm.category) {
     filtered = filtered.filter(p => p.category === filterForm.category);
   }
-  
+
   if (filterForm.keyword) {
     const keyword = filterForm.keyword.toLowerCase();
-    filtered = filtered.filter(p => 
-      p.name.toLowerCase().includes(keyword) ||
-      p.ip.toLowerCase().includes(keyword)
+    filtered = filtered.filter(p =>
+        p.name.toLowerCase().includes(keyword) ||
+        p.ip.toLowerCase().includes(keyword)
     );
   }
-  
+
   return filtered;
 });
 
@@ -109,38 +109,38 @@ const selectedProduct = computed(() => {
 });
 
 const inventoryStats = computed(() => {
-  const stats: Record<string, { 
-    total: number, 
+  const stats: Record<string, {
+    total: number,
     count: number,
     categories: Record<string, number>,
     scales: Record<string, number>
   }> = {};
-  
+
   inventoryRecords.value.forEach(record => {
     const product = productList.value.find(p => p.id === record.productId);
     const ip = product?.ip || record.ip || '未知IP';
-    
+
     if (!stats[ip]) {
-      stats[ip] = { 
-        total: 0, 
+      stats[ip] = {
+        total: 0,
         count: 0,
         categories: {},
         scales: {}
       };
     }
-    
+
     stats[ip].total += record.quantity;
     stats[ip].count += 1;
-    
+
     // 统计品类分布
     const category = record.category || '未分类';
     stats[ip].categories[category] = (stats[ip].categories[category] || 0) + record.quantity;
-    
+
     // 统计比例分布
     const scale = record.scale || '无比例';
     stats[ip].scales[scale] = (stats[ip].scales[scale] || 0) + record.quantity;
   });
-  
+
   return stats;
 });
 
@@ -187,27 +187,27 @@ const validateForm = (): boolean => {
     ElMessage.warning("请选择或输入手办产品");
     return false;
   }
-  
+
   if (form.quantity <= 0) {
     ElMessage.warning("入库数量必须大于0");
     return false;
   }
-  
+
   if (form.quantity > 9999) {
     ElMessage.warning("单次入库数量不能超过9999");
     return false;
   }
-  
+
   if (!form.ip && !form.productId) {
     ElMessage.warning("请选择IP系列");
     return false;
   }
-  
+
   if (!form.category && !form.productId) {
     ElMessage.warning("请选择品类");
     return false;
   }
-  
+
   return true;
 };
 
@@ -220,20 +220,20 @@ const handleProductSelect = (product: Product) => {
   form.scale = product.scale;
   form.price = product.price || 0;
   form.stock = product.stock || 0;
-  
+
   ElMessage.success(`已选择: ${product.name}`);
 };
 
 // 提交库存新增
 const submit = async () => {
   if (!validateForm()) return;
-  
+
   submitting.value = true;
-  
+
   try {
     // 1. 先确定产品信息
     let productInfo = selectedProduct.value;
-    
+
     // 2. 如果是新产品（手动输入），先添加到产品列表
     if (!productInfo && form.productName) {
       const newProduct = {
@@ -246,11 +246,11 @@ const submit = async () => {
         price: form.price || Mock.Random.integer(199, 5000),
         stock: form.stock
       };
-      
+
       // 添加到本地产品列表（模拟新增产品）
       productList.value.unshift(newProduct);
       productInfo = newProduct;
-      
+
       // 调用Mock API添加产品
       await axios.post("/api/inventory/add", {
         name: form.productName,
@@ -259,7 +259,7 @@ const submit = async () => {
         scale: form.scale
       });
     }
-    
+
     // 3. 创建库存记录
     const newRecord: InventoryRecord = {
       id: Date.now(),
@@ -280,11 +280,11 @@ const submit = async () => {
         second: '2-digit'
       })
     };
-    
+
     // 4. 保存记录
     inventoryRecords.value.unshift(newRecord);
     localStorage.setItem('figure_inventory_records', JSON.stringify(inventoryRecords.value));
-    
+
     // 5. 显示成功通知
     ElNotification({
       title: '入库成功',
@@ -294,16 +294,16 @@ const submit = async () => {
       position: 'top-right',
       customClass: 'success-notification'
     });
-    
+
     // 6. 重置表单
     resetForm();
-    
+
     // 7. 显示动画反馈
     showSuccessAnimation();
-    
+
   } catch (error: any) {
     console.error("提交失败:", error);
-    
+
     ElNotification({
       title: '操作失败',
       message: error.message || '网络错误，请稍后重试',
@@ -311,7 +311,7 @@ const submit = async () => {
       duration: 3000,
       position: 'top-right'
     });
-    
+
   } finally {
     submitting.value = false;
   }
@@ -347,15 +347,15 @@ const resetForm = () => {
 // 删除记录
 const deleteRecord = (index: number) => {
   ElMessageBox.confirm(
-    '确定要删除这条入库记录吗？删除后无法恢复',
-    '删除确认',
-    {
-      confirmButtonText: '确定删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-      customClass: 'delete-confirm-dialog',
-      center: true
-    }
+      '确定要删除这条入库记录吗？删除后无法恢复',
+      '删除确认',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        customClass: 'delete-confirm-dialog',
+        center: true
+      }
   ).then(() => {
     inventoryRecords.value.splice(index, 1);
     localStorage.setItem('figure_inventory_records', JSON.stringify(inventoryRecords.value));
@@ -368,14 +368,14 @@ const deleteRecord = (index: number) => {
 // 清除所有记录
 const clearAllRecords = () => {
   ElMessageBox.confirm(
-    '确定要清空所有入库记录吗？此操作不可恢复',
-    '清空确认',
-    {
-      confirmButtonText: '确定清空',
-      cancelButtonText: '取消',
-      type: 'error',
-      center: true
-    }
+      '确定要清空所有入库记录吗？此操作不可恢复',
+      '清空确认',
+      {
+        confirmButtonText: '确定清空',
+        cancelButtonText: '取消',
+        type: 'error',
+        center: true
+      }
   ).then(() => {
     inventoryRecords.value = [];
     localStorage.removeItem('figure_inventory_records');
@@ -389,7 +389,7 @@ const clearAllRecords = () => {
 const quickFill = (product: Product) => {
   handleProductSelect(product);
   form.quantity = 1;
-  
+
   ElMessage.info(`已快速选择: ${product.name}`);
 };
 
@@ -405,12 +405,12 @@ const exportRecords = () => {
   const dataStr = JSON.stringify(inventoryRecords.value, null, 2);
   const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
   const exportFileDefaultName = `手办入库记录_${new Date().toLocaleDateString()}.json`;
-  
+
   const linkElement = document.createElement('a');
   linkElement.setAttribute('href', dataUri);
   linkElement.setAttribute('download', exportFileDefaultName);
   linkElement.click();
-  
+
   ElMessage.success('记录导出成功');
 };
 
@@ -435,7 +435,7 @@ onMounted(() => {
         </div>
         <p class="page-subtitle">手办入库管理 · IP库存追踪 · 实时数据统计</p>
       </div>
-      
+
       <!-- 统计卡片 -->
       <div class="stats-cards">
         <el-card shadow="hover" class="stat-card">
@@ -449,7 +449,7 @@ onMounted(() => {
             </div>
           </div>
         </el-card>
-        
+
         <el-card shadow="hover" class="stat-card">
           <div class="stat-content">
             <el-icon class="stat-icon records">
@@ -461,7 +461,7 @@ onMounted(() => {
             </div>
           </div>
         </el-card>
-        
+
         <el-card shadow="hover" class="stat-card">
           <div class="stat-content">
             <el-icon class="stat-icon brands">
@@ -473,7 +473,7 @@ onMounted(() => {
             </div>
           </div>
         </el-card>
-        
+
         <el-card shadow="hover" class="stat-card">
           <div class="stat-content">
             <el-icon class="stat-icon scales">
@@ -507,56 +507,56 @@ onMounted(() => {
           <!-- 产品筛选器 -->
           <div class="product-filter">
             <el-input
-              v-model="filterForm.keyword"
-              placeholder="搜索手办名称或IP..."
-              clearable
-              size="large"
-              class="filter-input"
-              @input="loadProducts"
+                v-model="filterForm.keyword"
+                placeholder="搜索手办名称或IP..."
+                clearable
+                size="large"
+                class="filter-input"
+                @input="loadProducts"
             >
               <template #prefix>
                 <el-icon><Loading /></el-icon>
               </template>
             </el-input>
-            
+
             <div class="filter-tags">
               <el-select
-                v-model="filterForm.ip"
-                placeholder="筛选IP系列"
-                clearable
-                size="small"
-                class="filter-select"
-                @change="loadProducts"
+                  v-model="filterForm.ip"
+                  placeholder="筛选IP系列"
+                  clearable
+                  size="small"
+                  class="filter-select"
+                  @change="loadProducts"
               >
                 <el-option
-                  v-for="ip in configOptions.ipList"
-                  :key="ip"
-                  :label="ip"
-                  :value="ip"
+                    v-for="ip in configOptions.ipList"
+                    :key="ip"
+                    :label="ip"
+                    :value="ip"
                 />
               </el-select>
-              
+
               <el-select
-                v-model="filterForm.category"
-                placeholder="筛选品类"
-                clearable
-                size="small"
-                class="filter-select"
-                @change="loadProducts"
+                  v-model="filterForm.category"
+                  placeholder="筛选品类"
+                  clearable
+                  size="small"
+                  class="filter-select"
+                  @change="loadProducts"
               >
                 <el-option
-                  v-for="category in configOptions.categoryList"
-                  :key="category"
-                  :label="category"
-                  :value="category"
+                    v-for="category in configOptions.categoryList"
+                    :key="category"
+                    :label="category"
+                    :value="category"
                 />
               </el-select>
-              
+
               <el-button
-                type="text"
-                @click="resetFilter"
-                size="small"
-                class="reset-filter-btn"
+                  type="text"
+                  @click="resetFilter"
+                  size="small"
+                  class="reset-filter-btn"
               >
                 重置筛选
               </el-button>
@@ -569,34 +569,34 @@ onMounted(() => {
               <el-icon class="loading-icon"><Loading /></el-icon>
               <p>正在加载手办列表...</p>
             </div>
-            
+
             <div v-else-if="filteredProducts.length === 0" class="empty-products">
               <el-icon class="empty-icon"><Box /></el-icon>
               <p>暂无手办数据</p>
               <p class="empty-tip">请检查筛选条件或添加新手办</p>
             </div>
-            
+
             <div v-else class="product-grid">
               <div
-                v-for="product in filteredProducts.slice(0, 8)"
-                :key="product.id"
-                class="product-card"
-                :class="{ 'selected': product.id === Number(form.productId) }"
-                @click="quickFill(product)"
+                  v-for="product in filteredProducts.slice(0, 8)"
+                  :key="product.id"
+                  class="product-card"
+                  :class="{ 'selected': product.id === Number(form.productId) }"
+                  @click="quickFill(product)"
               >
                 <div class="product-header">
                   <div class="product-name" :title="product.name">
                     {{ product.name }}
                   </div>
                   <el-tag
-                    size="small"
-                    :type="product.price && product.price > 2000 ? 'warning' : 'success'"
-                    class="price-tag"
+                      size="small"
+                      :type="product.price && product.price > 2000 ? 'warning' : 'success'"
+                      class="price-tag"
                   >
                     ¥{{ product.price?.toLocaleString() || '--' }}
                   </el-tag>
                 </div>
-                
+
                 <div class="product-meta">
                   <el-tag size="small" type="info" class="meta-tag">
                     {{ product.ip }}
@@ -608,16 +608,16 @@ onMounted(() => {
                     {{ product.scale }}
                   </el-tag>
                 </div>
-                
+
                 <div class="product-footer">
                   <span class="stock-info">
                     库存: {{ product.stock || 0 }} 件
                   </span>
                   <el-button
-                    type="primary"
-                    size="small"
-                    @click.stop="handleProductSelect(product)"
-                    class="select-btn"
+                      type="primary"
+                      size="small"
+                      @click.stop="handleProductSelect(product)"
+                      class="select-btn"
                   >
                     选择入库
                   </el-button>
@@ -628,33 +628,33 @@ onMounted(() => {
 
           <!-- 入库表单 -->
           <div class="inventory-form-wrapper">
-            <el-form 
-              :model="form" 
-              label-width="100px" 
-              size="large"
-              :disabled="loading || submitting"
-              class="inventory-form"
+            <el-form
+                :model="form"
+                label-width="100px"
+                size="large"
+                :disabled="loading || submitting"
+                class="inventory-form"
             >
               <!-- 产品基本信息 -->
               <el-form-item label="手办产品" class="form-item" required>
                 <div class="product-selection">
                   <el-select
-                    v-model="form.productId"
-                    placeholder="选择手办或手动输入"
-                    filterable
-                    clearable
-                    allow-create
-                    remote
-                    :remote-method="loadProducts"
-                    :loading="loading"
-                    style="width: 100%"
-                    @change="handleProductSelect(selectedProduct!)"
+                      v-model="form.productId"
+                      placeholder="选择手办或手动输入"
+                      filterable
+                      clearable
+                      allow-create
+                      remote
+                      :remote-method="loadProducts"
+                      :loading="loading"
+                      style="width: 100%"
+                      @change="handleProductSelect(selectedProduct!)"
                   >
                     <el-option
-                      v-for="product in filteredProducts"
-                      :key="product.id"
-                      :label="product.name"
-                      :value="product.id.toString()"
+                        v-for="product in filteredProducts"
+                        :key="product.id"
+                        :label="product.name"
+                        :value="product.id.toString()"
                     >
                       <div class="product-option">
                         <span class="option-name">{{ product.name }}</span>
@@ -666,64 +666,64 @@ onMounted(() => {
                       </div>
                     </el-option>
                   </el-select>
-                  
+
                   <!-- 手动输入模式 -->
                   <div v-if="!form.productId" class="manual-input-section">
                     <div class="manual-input-row">
                       <el-input
-                        v-model="form.productName"
-                        placeholder="输入手办名称"
-                        clearable
-                        class="manual-input"
+                          v-model="form.productName"
+                          placeholder="输入手办名称"
+                          clearable
+                          class="manual-input"
                       />
                     </div>
-                    
+
                     <div class="manual-input-row">
                       <el-select
-                        v-model="form.ip"
-                        placeholder="选择IP系列"
-                        clearable
-                        class="manual-select"
+                          v-model="form.ip"
+                          placeholder="选择IP系列"
+                          clearable
+                          class="manual-select"
                       >
                         <el-option
-                          v-for="ip in configOptions.ipList"
-                          :key="ip"
-                          :label="ip"
-                          :value="ip"
+                            v-for="ip in configOptions.ipList"
+                            :key="ip"
+                            :label="ip"
+                            :value="ip"
                         />
                       </el-select>
-                      
+
                       <el-select
-                        v-model="form.category"
-                        placeholder="选择品类"
-                        clearable
-                        class="manual-select"
+                          v-model="form.category"
+                          placeholder="选择品类"
+                          clearable
+                          class="manual-select"
                       >
                         <el-option
-                          v-for="category in configOptions.categoryList"
-                          :key="category"
-                          :label="category"
-                          :value="category"
+                            v-for="category in configOptions.categoryList"
+                            :key="category"
+                            :label="category"
+                            :value="category"
                         />
                       </el-select>
-                      
+
                       <el-select
-                        v-model="form.scale"
-                        placeholder="选择比例"
-                        clearable
-                        class="manual-select"
+                          v-model="form.scale"
+                          placeholder="选择比例"
+                          clearable
+                          class="manual-select"
                       >
                         <el-option
-                          v-for="scale in configOptions.scaleList"
-                          :key="scale"
-                          :label="scale"
-                          :value="scale"
+                            v-for="scale in configOptions.scaleList"
+                            :key="scale"
+                            :label="scale"
+                            :value="scale"
                         />
                       </el-select>
                     </div>
                   </div>
                 </div>
-                
+
                 <!-- 已选产品信息 -->
                 <div v-if="selectedProduct || form.productName" class="selected-product-info">
                   <el-card shadow="never" class="info-card">
@@ -748,28 +748,28 @@ onMounted(() => {
               <el-form-item label="入库数量" class="form-item" required>
                 <div class="quantity-control">
                   <el-input-number
-                    v-model="form.quantity"
-                    :min="1"
-                    :max="9999"
-                    :step="1"
-                    controls-position="right"
-                    placeholder="输入数量"
-                    class="quantity-input"
+                      v-model="form.quantity"
+                      :min="1"
+                      :max="9999"
+                      :step="1"
+                      controls-position="right"
+                      placeholder="输入数量"
+                      class="quantity-input"
                   />
                   <div class="quantity-presets">
                     <el-button
-                      v-for="num in [1, 5, 10, 50, 100]"
-                      :key="num"
-                      size="small"
-                      @click="form.quantity = num"
-                      :type="form.quantity === num ? 'primary' : ''"
-                      class="preset-btn"
+                        v-for="num in [1, 5, 10, 50, 100]"
+                        :key="num"
+                        size="small"
+                        @click="form.quantity = num"
+                        :type="form.quantity === num ? 'primary' : ''"
+                        class="preset-btn"
                     >
                       {{ num }} 件
                     </el-button>
                   </div>
                 </div>
-                
+
                 <div v-if="selectedProduct" class="stock-preview">
                   <el-icon><Goods /></el-icon>
                   <span>
@@ -782,35 +782,35 @@ onMounted(() => {
               <!-- 备注输入 -->
               <el-form-item label="入库备注" class="form-item">
                 <el-input
-                  v-model="form.remark"
-                  type="textarea"
-                  :rows="3"
-                  placeholder="请输入入库备注信息（如：版本、批次、供应商、到货状态等）"
-                  maxlength="500"
-                  show-word-limit
-                  resize="none"
-                  class="remark-input"
+                    v-model="form.remark"
+                    type="textarea"
+                    :rows="3"
+                    placeholder="请输入入库备注信息（如：版本、批次、供应商、到货状态等）"
+                    maxlength="500"
+                    show-word-limit
+                    resize="none"
+                    class="remark-input"
                 />
               </el-form-item>
 
               <!-- 表单操作 -->
               <el-form-item class="form-actions">
                 <el-button
-                  type="primary"
-                  :loading="submitting"
-                  @click="submit"
-                  class="submit-btn"
-                  :icon="DocumentAdd"
-                  :disabled="(!form.productId && !form.productName) || form.quantity <= 0"
+                    type="primary"
+                    :loading="submitting"
+                    @click="submit"
+                    class="submit-btn"
+                    :icon="DocumentAdd"
+                    :disabled="(!form.productId && !form.productName) || form.quantity <= 0"
                 >
                   {{ submitting ? '提交中...' : '确认入库' }}
                 </el-button>
-                
+
                 <el-button
-                  @click="resetForm"
-                  class="reset-btn"
-                  :icon="Refresh"
-                  :disabled="submitting"
+                    @click="resetForm"
+                    class="reset-btn"
+                    :icon="Refresh"
+                    :disabled="submitting"
                 >
                   重置表单
                 </el-button>
@@ -838,19 +838,19 @@ onMounted(() => {
               <span class="records-title">最近入库记录</span>
               <div class="header-actions">
                 <el-button
-                  type="primary"
-                  size="small"
-                  @click="exportRecords"
-                  plain
+                    type="primary"
+                    size="small"
+                    @click="exportRecords"
+                    plain
                 >
                   导出记录
                 </el-button>
                 <el-button
-                  v-if="inventoryRecords.length > 0"
-                  type="danger"
-                  size="small"
-                  @click="clearAllRecords"
-                  plain
+                    v-if="inventoryRecords.length > 0"
+                    type="danger"
+                    size="small"
+                    @click="clearAllRecords"
+                    plain
                 >
                   清空记录
                 </el-button>
@@ -869,11 +869,11 @@ onMounted(() => {
 
           <!-- 记录列表 -->
           <div v-else class="records-list">
-            <div 
-              v-for="(record, index) in inventoryRecords.slice(0, 10)" 
-              :key="record.id || index"
-              class="record-item"
-              :class="{ 'new-record': index === 0 }"
+            <div
+                v-for="(record, index) in inventoryRecords.slice(0, 10)"
+                :key="record.id || index"
+                class="record-item"
+                :class="{ 'new-record': index === 0 }"
             >
               <div class="record-main">
                 <div class="record-header">
@@ -895,15 +895,15 @@ onMounted(() => {
                 </div>
               </div>
               <el-button
-                type="text"
-                @click="deleteRecord(index)"
-                class="delete-btn"
+                  type="text"
+                  @click="deleteRecord(index)"
+                  class="delete-btn"
               >
                 删除
               </el-button>
             </div>
           </div>
-          
+
           <!-- 查看更多 -->
           <div v-if="inventoryRecords.length > 10" class="view-more">
             <el-button type="text" class="more-btn">
@@ -922,44 +922,44 @@ onMounted(() => {
               <span class="stats-title">IP库存统计</span>
             </div>
           </template>
-          
+
           <div class="stats-list">
-            <div 
-              v-for="(stat, ip) in inventoryStats" 
-              :key="ip"
-              class="stat-item"
+            <div
+                v-for="(stat, ip) in inventoryStats"
+                :key="ip"
+                class="stat-item"
             >
               <div class="stat-header">
                 <span class="stat-ip">{{ ip }}</span>
                 <span class="stat-total">{{ stat.total }} 件</span>
               </div>
-              
+
               <!-- 品类分布 -->
               <div class="stat-categories">
-                <div 
-                  v-for="(count, category) in stat.categories" 
-                  :key="category"
-                  class="category-item"
+                <div
+                    v-for="(count, category) in stat.categories"
+                    :key="category"
+                    class="category-item"
                 >
                   <span class="category-label">{{ category }}</span>
                   <div class="category-bar">
-                    <div 
-                      class="bar-fill" 
-                      :style="{ width: Math.min(count / stat.total * 100, 100) + '%' }"
+                    <div
+                        class="bar-fill"
+                        :style="{ width: Math.min(count / stat.total * 100, 100) + '%' }"
                     ></div>
                     <span class="category-count">{{ count }}</span>
                   </div>
                 </div>
               </div>
-              
+
               <!-- 比例分布 -->
               <div class="stat-scales" v-if="Object.keys(stat.scales).length > 0">
                 <el-tag
-                  v-for="(count, scale) in stat.scales"
-                  :key="scale"
-                  size="small"
-                  type="info"
-                  class="scale-tag"
+                    v-for="(count, scale) in stat.scales"
+                    :key="scale"
+                    size="small"
+                    type="info"
+                    class="scale-tag"
                 >
                   {{ scale }}: {{ count }}
                 </el-tag>
@@ -1034,7 +1034,7 @@ onMounted(() => {
   border: none;
   transition: all 0.3s ease;
   background: white;
-  
+
   &:hover {
     transform: translateY(-4px);
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
@@ -1051,22 +1051,22 @@ onMounted(() => {
   font-size: 28px;
   padding: 12px;
   border-radius: 10px;
-  
+
   &.total {
     color: #ff6b6b;
     background: rgba(255, 107, 107, 0.1);
   }
-  
+
   &.records {
     color: #47b881;
     background: rgba(71, 184, 129, 0.1);
   }
-  
+
   &.brands {
     color: #f0b86e;
     background: rgba(240, 184, 110, 0.1);
   }
-  
+
   &.scales {
     color: #6c63ff;
     background: rgba(108, 99, 255, 0.1);
@@ -1079,7 +1079,7 @@ onMounted(() => {
     color: #8c8c8c;
     margin-bottom: 4px;
   }
-  
+
   .stat-value {
     font-size: 24px;
     font-weight: 700;
@@ -1092,7 +1092,7 @@ onMounted(() => {
   display: grid;
   grid-template-columns: 1fr 400px;
   gap: 24px;
-  
+
   @media (max-width: 1200px) {
     grid-template-columns: 1fr;
   }
@@ -1138,11 +1138,11 @@ onMounted(() => {
 
 .filter-input {
   margin-bottom: 12px;
-  
+
   :deep(.el-input__wrapper) {
     border-radius: 10px;
     border: 1px solid #e0e0e0;
-    
+
     &:hover {
       border-color: #ff6b6b;
     }
@@ -1175,7 +1175,7 @@ onMounted(() => {
   text-align: center;
   padding: 40px;
   color: #8c8c8c;
-  
+
   .loading-icon {
     font-size: 40px;
     margin-bottom: 16px;
@@ -1188,13 +1188,13 @@ onMounted(() => {
   text-align: center;
   padding: 40px;
   color: #8c8c8c;
-  
+
   .empty-icon {
     font-size: 48px;
     color: #dcdfe6;
     margin-bottom: 16px;
   }
-  
+
   .empty-tip {
     font-size: 12px;
     color: #b0b0b0;
@@ -1216,13 +1216,13 @@ onMounted(() => {
   background: white;
   cursor: pointer;
   transition: all 0.3s ease;
-  
+
   &:hover {
     transform: translateY(-4px);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
     border-color: #ff6b6b;
   }
-  
+
   &.selected {
     border-color: #ff6b6b;
     background: rgba(255, 107, 107, 0.05);
@@ -1304,22 +1304,22 @@ onMounted(() => {
     background: #f8f9fa;
     border-radius: 8px;
   }
-  
+
   .manual-input-row {
     display: grid;
     grid-template-columns: 1fr;
     gap: 12px;
     margin-bottom: 12px;
-    
+
     &:last-child {
       margin-bottom: 0;
     }
   }
-  
+
   .manual-input {
     width: 100%;
   }
-  
+
   .manual-select {
     flex: 1;
   }
@@ -1331,12 +1331,12 @@ onMounted(() => {
     margin-bottom: 4px;
     display: block;
   }
-  
+
   .option-tags {
     display: flex;
     gap: 6px;
   }
-  
+
   .option-tag {
     font-size: 11px;
     color: #8c8c8c;
@@ -1348,33 +1348,33 @@ onMounted(() => {
 
 .selected-product-info {
   margin-top: 12px;
-  
+
   .info-card {
     border: 1px solid #e8f4ff;
     background: #f0f9ff;
   }
-  
+
   .info-content {
     display: flex;
     justify-content: space-between;
     align-items: center;
   }
-  
+
   .info-main {
     flex: 1;
-    
+
     strong {
       display: block;
       margin-bottom: 8px;
       color: #2c3e50;
     }
   }
-  
+
   .info-tags {
     display: flex;
     gap: 6px;
   }
-  
+
   .info-price {
     color: #ff6b6b;
     font-weight: 600;
@@ -1391,7 +1391,7 @@ onMounted(() => {
 
 .quantity-input {
   width: 100%;
-  
+
   :deep(.el-input__inner) {
     height: 44px;
     font-size: 16px;
@@ -1419,12 +1419,12 @@ onMounted(() => {
   border-radius: 8px;
   font-size: 13px;
   color: #606266;
-  
+
   strong {
     color: #47b881;
     font-weight: 600;
   }
-  
+
   .total-stock {
     color: #ff6b6b;
   }
@@ -1438,7 +1438,7 @@ onMounted(() => {
     transition: all 0.3s;
     padding: 12px;
     font-size: 14px;
-    
+
     &:focus {
       border-color: #ff6b6b;
       box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.1);
@@ -1451,7 +1451,7 @@ onMounted(() => {
   margin-top: 30px;
   padding-top: 20px;
   border-top: 1px solid #f0f0f0;
-  
+
   .submit-btn {
     flex: 1;
     height: 48px;
@@ -1460,30 +1460,30 @@ onMounted(() => {
     background: linear-gradient(45deg, #ff6b6b, #ff8e8e);
     border: none;
     transition: all 0.3s;
-    
+
     &:not(:disabled):hover {
       transform: translateY(-2px);
       box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
     }
-    
+
     &:disabled {
       opacity: 0.6;
       cursor: not-allowed;
     }
   }
-  
+
   .reset-btn {
     height: 48px;
     padding: 0 24px;
     background: #f0f2f5;
     border-color: #dcdfe6;
     color: #606266;
-    
+
     &:hover {
       background: #e4e7ed;
       border-color: #c0c4cc;
     }
-    
+
     &:disabled {
       opacity: 0.6;
     }
@@ -1546,13 +1546,13 @@ onMounted(() => {
   text-align: center;
   padding: 40px 20px;
   color: #8c8c8c;
-  
+
   .empty-icon {
     font-size: 48px;
     color: #dcdfe6;
     margin-bottom: 16px;
   }
-  
+
   .empty-tip {
     font-size: 12px;
     color: #b0b0b0;
@@ -1564,7 +1564,7 @@ onMounted(() => {
 .records-list {
   max-height: 400px;
   overflow-y: auto;
-  
+
   .record-item {
     padding: 16px;
     border-bottom: 1px solid #f0f0f0;
@@ -1572,15 +1572,15 @@ onMounted(() => {
     align-items: flex-start;
     justify-content: space-between;
     transition: background 0.2s;
-    
+
     &:hover {
       background: #fafafa;
     }
-    
+
     &:last-child {
       border-bottom: none;
     }
-    
+
     &.new-record {
       background: rgba(255, 107, 107, 0.05);
       border-left: 4px solid #ff6b6b;
@@ -1614,19 +1614,19 @@ onMounted(() => {
     display: flex;
     gap: 6px;
     margin-bottom: 6px;
-    
+
     .el-tag {
       height: 22px;
       font-size: 11px;
     }
   }
-  
+
   .record-time {
     font-size: 12px;
     color: #8c8c8c;
     margin-bottom: 4px;
   }
-  
+
   .record-remark {
     font-size: 13px;
     color: #606266;
@@ -1645,7 +1645,7 @@ onMounted(() => {
   transition: opacity 0.2s;
   padding: 0;
   height: auto;
-  
+
   .record-item:hover & {
     opacity: 1;
   }
@@ -1687,7 +1687,7 @@ onMounted(() => {
     margin-bottom: 20px;
     padding-bottom: 16px;
     border-bottom: 1px solid #f0f0f0;
-    
+
     &:last-child {
       margin-bottom: 0;
       padding-bottom: 0;
@@ -1718,7 +1718,7 @@ onMounted(() => {
 .stat-categories {
   .category-item {
     margin-bottom: 8px;
-    
+
     &:last-child {
       margin-bottom: 0;
     }
@@ -1801,43 +1801,43 @@ onMounted(() => {
   .figure-inventory-page {
     padding: 12px;
   }
-  
+
   .page-title {
     font-size: 22px;
   }
-  
+
   .stats-cards {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .content-wrapper {
     gap: 16px;
   }
-  
+
   .product-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .form-actions {
     flex-direction: column;
-    
+
     .el-button {
       width: 100%;
       margin-left: 0 !important;
     }
   }
-  
+
   .records-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 12px;
-    
+
     .header-actions {
       width: 100%;
       justify-content: flex-end;
     }
   }
-  
+
   .info-content {
     flex-direction: column;
     align-items: flex-start;
