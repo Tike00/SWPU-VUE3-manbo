@@ -191,14 +191,11 @@ export default defineComponent({
 
 /* 主内容区布局优化 */
 .el-row.tac {
-  display: flex;
   min-height: 100vh;
 }
-
-.el-row.tac > div:not(.el-col) {
+/* main-content 本身已经有 padding 和背景色了，这里可以不再额外设置 */
+.el-row.tac > .main-content {
   flex: 1;
-  padding: 20px;
-  background-color: #f5f7fa;
 }
 </style>
 
