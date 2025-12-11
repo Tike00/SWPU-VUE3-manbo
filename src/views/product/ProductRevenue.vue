@@ -1,186 +1,125 @@
+<template>
+  <div class="p-6 space-y-6">
+
+    <!-- 标题 -->
+    <h2 class="text-2xl font-bold">产品销售额统计</h2>
+
+    <!-- 刷新按钮 -->
+    <el-button type="primary" @click="loadData" :loading="loading">
+      刷新销售数据
+    </el-button>
+
+    <!-- 柱状图 -->
+    <div class="bg-white rounded-2xl shadow p-6">
+      <h3 class="text-lg font-semibold mb-4">销售额柱状图</h3>
+      <div ref="barRef" style="width: 100%; height: 360px"></div>
+    </div>
+
+    <!-- 饼状图 -->
+    <div class="bg-white rounded-2xl shadow p-6">
+      <h3 class="text-lg font-semibold mb-4">销售占比饼状图</h3>
+      <div ref="pieRef" style="width: 100%; height: 360px"></div>
+    </div>
+
+  </div>
+</template>
+
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
-import { ElMessage } from "element-plus";
-import * as echarts from "echarts";
+import { ref, onMounted, nextTick } from "vue";
 import axios from "axios";
+import * as echarts from "echarts";
 
-const loading = ref(false);
-const dateRange = ref("");
-const revenueData = ref<any[]>([]);
-
-// 柱状图
-const barChartRef = ref<HTMLDivElement | null>(null);
+const barRef = ref<HTMLElement | null>(null);
+const pieRef = ref<HTMLElement | null>(null);
 let barChart: echarts.ECharts | null = null;
-
-// 饼状图
-const pieChartRef = ref<HTMLDivElement | null>(null);
 let pieChart: echarts.ECharts | null = null;
 
-const fetchData = async () => {
+const loading = ref(false);
+const productList = ref<any[]>([]);
+
+// ------------------ 加载数据：读取你 mock 的 /api/products ------------------
+const loadData = async () => {
   loading.value = true;
   try {
-    const res = await axios.get("/api/revenue");
-    revenueData.value = res.data || [];
-    renderBarChart();
-    renderPieChart();
-  } catch {
-    ElMessage.error("获取收入数据失败");
+    const res = await axios.get("/api/products");
+    if (res.data?.code === 200) {
+      productList.value = res.data.data;
+
+      await nextTick();
+      renderBarChart();
+      renderPieChart();
+    }
+  } finally {
+    loading.value = false;
   }
-  loading.value = false;
 };
 
-// 渲染柱状图
+// ------------------ 柱状图 ------------------
 const renderBarChart = () => {
-  if (!barChartRef.value) return;
+  if (!barRef.value) return;
 
-  if (!barChart) {
-    barChart = echarts.init(barChartRef.value);
-    window.addEventListener("resize", () => barChart?.resize());
-  }
-
+  barChart = echarts.init(barRef.value);
   barChart.setOption({
-    title: { text: "产品收入柱状图（Mock）", left: "center" },
-    tooltip: { trigger: "axis" },
-    grid: { left: "5%", right: "5%", bottom: "10%" },
+    tooltip: {
+      trigger: "axis",
+    },
     xAxis: {
       type: "category",
-      data: revenueData.value.map((i) => i.productName),
-      axisLabel: { rotate: 20 }
+      data: productList.value.map((item) => item.name),
+      axisLabel: { interval: 0, rotate: 30 }, // 名称可能较长
     },
-    yAxis: { type: "value" },
+    yAxis: {
+      type: "value",
+      name: "销售额（元）",
+    },
     series: [
       {
-        name: "收入 (¥)",
+        name: "销售额",
         type: "bar",
-        barWidth: "45%",
-        data: revenueData.value.map((i) => i.revenue),
+        data: productList.value.map((item) => item.price),
+        barWidth: "55%",
       },
     ],
   });
 };
 
-// 渲染饼状图
+// ------------------ 饼状图 ------------------
 const renderPieChart = () => {
-  if (!pieChartRef.value) return;
+  if (!pieRef.value) return;
 
-  if (!pieChart) {
-    pieChart = echarts.init(pieChartRef.value);
-    window.addEventListener("resize", () => pieChart?.resize());
-  }
-
+  pieChart = echarts.init(pieRef.value);
   pieChart.setOption({
-    title: {
-      text: "收入占比（Mock）",
-      left: "center"
-    },
-    tooltip: {
-      trigger: "item",
-      formatter: "{b}: {c} 元 ({d}%)"
-    },
-    legend: {
-      bottom: "2%"
-    },
+    tooltip: { trigger: "item" },
+    legend: { bottom: 0 },
     series: [
       {
-        name: "收入占比",
+        name: "销售占比",
         type: "pie",
-        radius: ["35%", "65%"],
-        center: ["50%", "50%"],
-        avoidLabelOverlap: false,
-        data: revenueData.value.map((i) => ({
-          name: i.productName,
-          value: i.revenue
+        radius: "70%",
+        data: productList.value.map((item) => ({
+          name: item.name,
+          value: item.price,
         })),
         emphasis: {
-          itemStyle: { shadowBlur: 10, shadowColor: "rgba(0,0,0,0.3)" }
-        }
-      }
-    ]
+          itemStyle: { shadowBlur: 10, shadowOffsetX: 0 },
+        },
+      },
+    ],
   });
 };
 
-onMounted(fetchData);
+// 页面挂载时加载一次
+onMounted(() => {
+  loadData();
+
+  // 自适应窗口变化
+  window.addEventListener("resize", () => {
+    barChart?.resize();
+    pieChart?.resize();
+  });
+});
 </script>
 
-<template>
-  <div class="page">
-    <!-- 筛选区卡片 -->
-    <el-card shadow="hover" class="card">
-      <template #header>
-        <div class="card-header">📊 数据筛选</div>
-      </template>
-
-      <el-row :gutter="20" align="middle">
-        <el-col :span="10">
-          <el-date-picker
-            v-model="dateRange"
-            type="daterange"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期"
-            style="width: 100%"
-          />
-        </el-col>
-        <el-col :span="4">
-          <el-button type="primary" :loading="loading" @click="fetchData" style="width: 100%">
-            查询
-          </el-button>
-        </el-col>
-      </el-row>
-    </el-card>
-
-    <!-- 柱状图卡片 -->
-    <el-card shadow="hover" class="card mt">
-      <template #header>
-        <div class="card-header">📈 产品收入柱状图</div>
-      </template>
-      <div ref="barChartRef" class="chart"></div>
-    </el-card>
-
-    <!-- 饼状图卡片（新增） -->
-    <el-card shadow="hover" class="card mt">
-      <template #header>
-        <div class="card-header">🧁 产品收入占比饼状图</div>
-      </template>
-      <div ref="pieChartRef" class="chart"></div>
-    </el-card>
-
-    <!-- 表格卡片 -->
-    <el-card shadow="hover" class="card mt">
-      <template #header>
-        <div class="card-header">📄 收入详细数据</div>
-      </template>
-
-      <el-table :data="revenueData" border stripe>
-        <el-table-column prop="productName" label="产品名称" width="200" />
-        <el-table-column prop="quantity" label="销量" width="120" />
-        <el-table-column prop="revenue" label="销售收入（¥）" />
-      </el-table>
-    </el-card>
-  </div>
-</template>
-
 <style scoped>
-.page {
-  padding: 24px;
-  background: #f5f6fa;
-  min-height: 100vh;
-}
-
-.card {
-  border-radius: 12px;
-}
-
-.card-header {
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.mt {
-  margin-top: 24px;
-}
-
-.chart {
-  width: 100%;
-  height: 380px;
-}
+/* Tailwind 已经覆盖大部分 UI 样式，这里可以不用写 */
 </style>
