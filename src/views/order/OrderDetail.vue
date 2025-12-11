@@ -118,9 +118,9 @@ const fetchDetail = async () => {
   }
   loading.value = true
   try {
-    const res = await axios.get('/api/orders/detail', {
-      params: { id: orderId.value },
-    })
+    // ✅ 手动把 id 拼到 URL 上，配合当前 Mock.parseQuery 的写法
+    const res = await axios.get(`/api/orders/detail?id=${orderId.value}`)
+
     if (res.data.code === 200) {
       order.value = res.data.data
     } else {
@@ -259,3 +259,4 @@ watch(
   margin: 12px 0;
 }
 </style>
+
